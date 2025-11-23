@@ -33,7 +33,17 @@ Uses raw curl commands for Galaxy API interactions.
 
 ## Quick Start
 
-### 1. Set Up Credentials
+### 1. Set Up Credentials (Securely)
+
+**Recommended: Use the setup script**
+
+```bash
+./setup-credentials.sh
+```
+
+This will securely store your Galaxy URL and API key in `~/.galaxy-credentials` with proper permissions.
+
+**Manual setup:**
 
 ```bash
 export GALAXY_URL="https://usegalaxy.org"
@@ -41,6 +51,8 @@ export GALAXY_API_KEY="your_api_key_here"
 ```
 
 Get your API key from: User → Preferences → Manage API Key in your Galaxy instance.
+
+⚠️ **Important:** Never commit your API key to git! See [SECURITY.md](SECURITY.md) for best practices.
 
 ### 2. Install Dependencies (for BioBlend skill)
 
@@ -141,6 +153,17 @@ When you ask Claude about specific analyses, it will suggest relevant GTN tutori
 | Best for | Regular Galaxy users | Occasional use, portability |
 
 If you use Galaxy frequently in Claude Desktop, consider the [MCP server](https://github.com/galaxyproject/galaxy-mcp). For occasional use or maximum portability, use these skills!
+
+## Security
+
+Your Galaxy API key is sensitive! Please read our [Security Best Practices](SECURITY.md) guide.
+
+**Quick tips:**
+- ✅ Use `./setup-credentials.sh` to store credentials securely
+- ✅ Store credentials in `~/.galaxy-credentials` with 600 permissions
+- ✅ Add credential files to `.gitignore`
+- ❌ Never commit API keys to git
+- ❌ Never share your API key
 
 ## Contributing
 
