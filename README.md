@@ -31,6 +31,22 @@ Uses raw curl commands for Galaxy API interactions.
 - Quick one-off operations
 - Systems without Python access
 
+### 🧬 gene-mapping.md (RNA-seq Analysis)
+Maps gene identifiers between different genome annotation versions using LFC correlation.
+
+**Requirements:**
+- Python 3 with pandas, numpy, scipy
+- matplotlib (optional, for plots)
+
+**Best for:**
+- Comparing DEG results across studies using different annotations
+- Validating reproducibility of published RNA-seq findings
+- Resolving gene ID mismatches between annotation versions
+
+**Includes:**
+- Standalone script: `scripts/gene_mapping.py`
+- Functions for LFC-based mapping, validation, and visualization
+
 ## Quick Start
 
 ### 1. Set Up Credentials (Securely)
@@ -129,6 +145,23 @@ import it, and help me run it on my datasets."
 
 ```bash
 claude "Using galaxy-bioblend.md, show me the status of all my running jobs."
+```
+
+### Example 4: Map Gene IDs Between Annotation Versions
+
+```bash
+claude "Using gene-mapping.md, I have DEG results from a paper (paper_degs.csv) and
+my own analysis (my_degs.csv). The gene IDs don't match because we used different
+genome annotations. Help me map them using LFC correlation."
+```
+
+Or use the standalone script directly:
+```bash
+python scripts/gene_mapping.py \
+    --source paper_degs.csv \
+    --target my_degs.csv \
+    --output mapping.csv \
+    --plot validation.png
 ```
 
 ## Learning Resources
