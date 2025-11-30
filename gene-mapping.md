@@ -303,6 +303,33 @@ A successful gene mapping should meet these criteria:
 
 ## Handling Edge Cases
 
+### 0. Reversed LFC Direction (DESeq2 Reference Swap)
+
+**Problem**: If your DESeq2 analysis used a different reference/treatment assignment than the paper, all LFC signs will be flipped. For example:
+- Paper: tnSWI1 vs AR0382 (mutant/wildtype) → SCF1 has LFC = -6.68
+- Your analysis: AR0382 vs tnSWI1 (wildtype/mutant) → SCF1 has LFC = +6.82
+
+**Solution**: Use `--auto-direction` flag or the `detect_lfc_direction()` function:
+
+```python
+from gene_mapping import detect_lfc_direction, create_lfc_mapping
+
+# Automatic detection and correction
+mapping = create_lfc_mapping(source_df, target_df, auto_detect_direction=True)
+
+# Or manual detection
+should_negate, r_asis, r_neg = detect_lfc_direction(source_df, target_df)
+if should_negate:
+    target_df['lfc'] = -target_df['lfc']
+    print(f"Direction reversed! (R={r_asis:.3f} → R={r_neg:.3f} after negation)")
+```
+
+**Command line**:
+```bash
+python gene_mapping.py --source paper.csv --target our.csv \
+    --auto-direction --output mapping.csv
+```
+
 ### 1. Duplicate LFC Values
 
 If multiple genes have identical LFC values:

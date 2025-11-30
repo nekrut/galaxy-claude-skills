@@ -5,12 +5,17 @@ Gene ID Mapping Between Annotation Versions
 Maps gene identifiers between two DEG result files using LFC correlation.
 Useful when comparing results from different genome annotation versions.
 
+Features:
+    - Automatic detection of reversed LFC direction (--auto-direction)
+    - One-to-one optimal mapping using Hungarian algorithm (--unique)
+    - Validation with Pearson/Spearman correlation and Bland-Altman plots
+
 Usage:
     python gene_mapping.py --source paper_degs.csv --target our_degs.csv \
                            --output mapping.csv --plot validation.png
 
 Example:
-    # Map paper gene IDs to our annotation
+    # Map paper gene IDs to our annotation with auto direction detection
     python gene_mapping.py \
         --source paper_invitro_degs.csv \
         --target deseq2_results.tsv \
@@ -18,8 +23,14 @@ Example:
         --source-lfc-col LFC \
         --target-gene-col gene_id \
         --target-lfc-col log2FoldChange \
+        --auto-direction \
         --output gene_mapping.csv \
         --plot mapping_validation.png
+
+Note on LFC direction:
+    If your DESeq2 analysis used a different reference/treatment assignment
+    than the paper, your LFC values will have opposite signs. The --auto-direction
+    flag detects this and automatically corrects for it.
 """
 
 import argparse
@@ -72,7 +83,60 @@ def load_deg_file(filepath, gene_col='Gene_ID', lfc_col='LFC', sep=None):
     return result
 
 
-def create_lfc_mapping(source_df, target_df, tolerance=None, unique=False):
+def detect_lfc_direction(source_df, target_df, sample_size=100):
+    """
+    Detect if LFC values need to be negated (comparison direction reversed).
+
+    Tests correlation with LFC as-is vs negated, returns the better option.
+
+    Args:
+        source_df: DataFrame with 'gene_id' and 'lfc' columns
+        target_df: DataFrame with 'gene_id' and 'lfc' columns
+        sample_size: Number of genes to sample for quick test
+
+    Returns:
+        Tuple of (should_negate: bool, correlation_as_is: float, correlation_negated: float)
+    """
+    # Sample for speed if datasets are large
+    if len(source_df) > sample_size:
+        source_sample = source_df.nlargest(sample_size // 2, 'lfc').copy()
+        source_sample = pd.concat([source_sample,
+                                   source_df.nsmallest(sample_size // 2, 'lfc')])
+    else:
+        source_sample = source_df.copy()
+
+    # Quick mapping with both directions
+    target_lfcs = target_df['lfc'].values
+
+    matched_source = []
+    matched_target_asis = []
+    matched_target_neg = []
+
+    for _, row in source_sample.iterrows():
+        src_lfc = row['lfc']
+
+        # Find best match as-is
+        diffs_asis = np.abs(target_lfcs - src_lfc)
+        best_asis = target_lfcs[np.argmin(diffs_asis)]
+
+        # Find best match with negation
+        diffs_neg = np.abs(target_lfcs - (-src_lfc))
+        best_neg = -target_lfcs[np.argmin(diffs_neg)]  # Negate back for comparison
+
+        matched_source.append(src_lfc)
+        matched_target_asis.append(best_asis)
+        matched_target_neg.append(best_neg)
+
+    # Calculate correlations
+    r_asis, _ = stats.pearsonr(matched_source, matched_target_asis)
+    r_neg, _ = stats.pearsonr(matched_source, matched_target_neg)
+
+    should_negate = abs(r_neg) > abs(r_asis)
+
+    return should_negate, r_asis, r_neg
+
+
+def create_lfc_mapping(source_df, target_df, tolerance=None, unique=False, auto_detect_direction=False):
     """
     Map genes between two annotation versions using LFC correlation.
 
@@ -84,10 +148,23 @@ def create_lfc_mapping(source_df, target_df, tolerance=None, unique=False):
         target_df: DataFrame with 'gene_id' and 'lfc' columns (to map)
         tolerance: Maximum LFC difference to consider a valid match (None = no limit)
         unique: If True, ensure one-to-one mapping using Hungarian algorithm
+        auto_detect_direction: If True, automatically detect and correct reversed LFC direction
 
     Returns:
         DataFrame with mapping: source_gene, source_lfc, target_gene, target_lfc, lfc_diff
+        If auto_detect_direction=True, also prints whether direction was reversed
     """
+    # Auto-detect direction if requested
+    if auto_detect_direction:
+        should_negate, r_asis, r_neg = detect_lfc_direction(source_df, target_df)
+        if should_negate:
+            print(f"  Direction reversal detected! (R={r_asis:.3f} as-is, R={r_neg:.3f} negated)")
+            print(f"  Negating target LFC values to match source direction...")
+            target_df = target_df.copy()
+            target_df['lfc'] = -target_df['lfc']
+        else:
+            print(f"  LFC direction matches (R={r_asis:.3f})")
+
     if unique:
         return _create_unique_mapping(source_df, target_df, tolerance)
 
@@ -345,6 +422,8 @@ def main():
                         help='Maximum LFC difference for valid match (default: no limit)')
     parser.add_argument('--unique', action='store_true',
                         help='Ensure one-to-one mapping (uses Hungarian algorithm)')
+    parser.add_argument('--auto-direction', action='store_true',
+                        help='Auto-detect if LFC direction is reversed (e.g., DESeq2 ran with swapped reference)')
     parser.add_argument('--quiet', action='store_true',
                         help='Suppress detailed output')
 
@@ -366,7 +445,8 @@ def main():
     # Create mapping
     if not args.quiet:
         print("Creating LFC-based gene mapping...")
-    mapping = create_lfc_mapping(source_df, target_df, args.tolerance, args.unique)
+    mapping = create_lfc_mapping(source_df, target_df, args.tolerance, args.unique,
+                                  auto_detect_direction=args.auto_direction)
     if not args.quiet:
         print(f"  Mapped {len(mapping)} genes")
 
